@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Body, status
+from fastapi import FastAPI, Body, HTTPException, status
 from fastapi.responses import FileResponse
 
 from .gtfs_export import GtfsExport, GtfsFeedInfo, GtfsAgency
@@ -12,15 +12,45 @@ import schedule
 import threading
 import time
 import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 from .models.Carpool import Carpool, Region
 from .router import _assert_region_exists
-from amarillo.plugins.enhancer.services import stops
-from amarillo.plugins.enhancer.services.trips import TripStore, Trip
-from amarillo.plugins.enhancer.services.carpools import CarpoolService
+from amarillo.plugins.enhancer.services import stops #TODO: make stop service its own package??
+from .services.trips import TripStore, Trip
+from .services.carpools import CarpoolService
 from amarillo.services.agencies import AgencyService
 from amarillo.services.regions import RegionService
+from amarillo.utils.utils import agency_carpool_ids_from_filename
+
 
 logger = logging.getLogger(__name__)
+
+class EventHandler(FileSystemEventHandler):
+
+    def on_closed(self, event):
+  
+        logger.info("CLOSE_WRITE: Created %s", event.src_path)
+        try:
+            with open(event.src_path, 'r', encoding='utf-8') as f:
+                dict = json.load(f)
+                carpool = Carpool(**dict)
+
+            container['carpools'].put(carpool.agency, carpool.id, carpool)
+        except FileNotFoundError as e:
+            logger.error("Carpool could not be added, as already deleted (%s)", event.src_path)
+        except:
+            logger.exception("Eventhandler on_closed encountered exception")        
+
+    def on_deleted(self, event):
+        try:
+            logger.info("DELETE: Removing %s", event.src_path)
+            (agency_id, carpool_id) = agency_carpool_ids_from_filename(event.src_path)
+            container['carpools'].delete(agency_id, carpool_id)
+        except:
+            logger.exception("Eventhandler on_deleted encountered exception")
+
+
 
 def init():
 	container['agencies'] = AgencyService()
@@ -40,7 +70,7 @@ def init():
 	container['stops_store'] = stop_store
 	container['trips_store'] = TripStore(stop_store)
 
-	# TODO: do we need the carpool service at all?
+	# TODO: the carpool service may be obsolete
 	container['carpools'] = CarpoolService(container['trips_store'])
 
 	logger.info("Restore carpools...")
@@ -54,6 +84,11 @@ def init():
 					container['carpools'].put(carpool.agency, carpool.id, carpool)
 			except Exception as e:
 				logger.warning("Issue during restore of carpool %s: %s", carpool_file_name, repr(e))
+
+	observer = Observer()  # Watch Manager
+
+	observer.schedule(EventHandler(), 'data/enhanced', recursive=True)
+	observer.start()
 
 def run_schedule():
 
@@ -82,7 +117,7 @@ def generate_gtfs():
 		exporter = GtfsExport(
 			container['agencies'].agencies,
 			feed_info, 
-			container['trips_store'], # TODO: read carpools from disk and convert them to trips
+			container['trips_store'], 
 			container['stops_store'], 
 			region.bbox)
 		exporter.export(f"data/gtfs/amarillo.{region.id}.gtfs.zip", "data/tmp/")
@@ -109,7 +144,7 @@ def setup(app : FastAPI):
 	pass
 
 logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
-logger = logging.getLogger("enhancer")
+logger = logging.getLogger("gtfs-generator")
 
 #TODO: clean up metadata
 app = FastAPI(title="Amarillo GTFS Generator",
@@ -173,22 +208,22 @@ app = FastAPI(title="Amarillo GTFS Generator",
 
 init()
 
-@app.post("/",
-	operation_id="enhancecarpool",
-	summary="Add a new or update existing carpool",
-	description="Carpool object to be enhanced",
-	responses={
-		status.HTTP_404_NOT_FOUND: {
-			"description": "Agency does not exist"},
+# @app.post("/",
+# 	operation_id="enhancecarpool",
+# 	summary="Add a new or update existing carpool",
+# 	description="Carpool object to be enhanced",
+# 	responses={
+# 		status.HTTP_404_NOT_FOUND: {
+# 			"description": "Agency does not exist"},
                  
-	})
+# 	})
 #TODO: add examples
-async def post_carpool(carpool: Carpool = Body(...)):
+# async def post_carpool(carpool: Carpool = Body(...)):
 
-	logger.info(f"POST trip {carpool.agency}:{carpool.id}.")
+# 	logger.info(f"POST trip {carpool.agency}:{carpool.id}.")
 
-	trips_store: TripStore = container['trips_store']
-	trip = trips_store._load_as_trip(carpool)
+# 	trips_store: TripStore = container['trips_store']
+# 	trip = trips_store._load_as_trip(carpool)
 
 #TODO: carpool deleted endpoint
 	
@@ -207,6 +242,26 @@ async def get_file(region_id: str):
 	generate_gtfs()
 	# verify_permission("gtfs", requesting_user)
 	return FileResponse(f'data/gtfs/amarillo.{region_id}.gtfs.zip')
+
+@app.get("/region/{region_id}/grfs-rt/",
+    summary="Return GRFS-RT Feed for this region",
+    response_description="GRFS-RT-Feed",
+    response_class=FileResponse,
+    responses={
+                status.HTTP_404_NOT_FOUND: {"description": "Region not found"},
+                status.HTTP_400_BAD_REQUEST: {"description": "Bad request, e.g. because format is not supported, i.e. neither protobuf nor json."}
+        }
+    )
+async def get_file(region_id: str, format: str = 'protobuf'):
+    generate_gtfs_rt()
+    _assert_region_exists(region_id)
+    if format == 'json':
+        return FileResponse(f'data/grfs/amarillo.{region_id}.gtfsrt.json')
+    elif format == 'protobuf':
+        return FileResponse(f'data/grfs/amarillo.{region_id}.gtfsrt.pbf')
+    else:
+        message = "Specified format is not supported, i.e. neither protobuf nor json."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 #TODO: sync endpoint that calls midnight
 
