@@ -16,7 +16,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from .models.Carpool import Carpool, Region
 from .router import _assert_region_exists
-from amarillo.plugins.enhancer.services import stops #TODO: make stop service its own package??
+from .services import stops #TODO: make stop service its own package??
 from .services.trips import TripStore, Trip
 from .services.carpools import CarpoolService
 from amarillo.services.agencies import AgencyService
