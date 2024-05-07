@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from amarillo.models.Carpool import Region
 from amarillo.services.regions import RegionService
 # from amarillo.services.oauth2 import get_current_user, verify_permission
-from amarillo.models.User import User
+# from amarillo.models.User import User
 from amarillo.utils.container import container
 from fastapi.responses import FileResponse
 

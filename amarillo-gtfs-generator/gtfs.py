@@ -1,5 +1,5 @@
 from .gtfsrt import gtfs_realtime_pb2 as gtfs_realtime_pb2
-from gtfsrt import realtime_extension_pb2 as mfdzrte
+from .gtfsrt import realtime_extension_pb2 as mfdzrte
 from .gtfs_constants import *
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.json_format import ParseDict

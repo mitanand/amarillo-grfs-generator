@@ -5,7 +5,7 @@ from .gtfs_export import GtfsExport, GtfsFeedInfo, GtfsAgency
 from .gtfs import GtfsRtProducer
 from amarillo.utils.container import container
 # from amarillo.plugins.gtfs_export.router import router
-from amarillo.plugins.enhancer.configuration import configure_enhancer_services
+# from amarillo.plugins.enhancer.configuration import configure_enhancer_services
 from glob import glob
 import json
 import schedule
