@@ -2,7 +2,7 @@ from ..models.gtfs import GtfsTimeDelta, GtfsStopTime
 from ..models.Carpool import MAX_STOPS_PER_TRIP, Carpool, Weekday, StopTime, PickupDropoffType, Driver, RidesharingInfo
 from amarillo.services.config import config
 from ..gtfs_constants import *
-from amarillo.plugins.enhancer.services.routing import RoutingService, RoutingException
+# from amarillo.plugins.enhancer.services.routing import RoutingService, RoutingException
 from ..services.stops import is_carpooling_stop
 from amarillo.utils.utils import assert_folder_exists, is_older_than_days, yesterday, geodesic_distance_in_m
 from shapely.geometry import Point, LineString, box
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class Trip:
 
-    def __init__(self, trip_id, route_name, headsign, url, calendar, departureTime, path, agency, lastUpdated, stop_times, driver: Driver, additional_ridesharing_info: RidesharingInfo, bbox):
+    def __init__(self, trip_id, route_name, headsign, url, calendar, departureTime, path, agency, lastUpdated, stop_times, driver: Driver, additional_ridesharing_info: RidesharingInfo, route_color, route_text_color, bbox):
         if isinstance(calendar, set):
             self.runs_regularly = True
             self.weekdays = [ 
@@ -45,6 +45,8 @@ class Trip:
         self.stop_times = stop_times
         self.driver = driver
         self.additional_ridesharing_info = additional_ridesharing_info
+        self.route_color = route_color
+        self.route_text_color = route_text_color
         self.bbox = bbox
         self.route_name = route_name
         self.trip_headsign = headsign
@@ -95,31 +97,32 @@ class TripStore():
         """
         Adds carpool to the TripStore.
         """
-        id = "{}:{}".format(carpool.agency, carpool.id)
-        filename = f'data/enhanced/{carpool.agency}/{carpool.id}.json'
-        try:
-            existing_carpool = self._load_carpool_if_exists(carpool.agency, carpool.id)
-            if existing_carpool and existing_carpool.lastUpdated == carpool.lastUpdated:
-                enhanced_carpool = existing_carpool
-            else:
-                if len(carpool.stops) < 2 or self.distance_in_m(carpool) < 1000:
-                    logger.warning("Failed to add carpool %s:%s to TripStore, distance too low", carpool.agency, carpool.id)
-                    self.handle_failed_carpool_enhancement(carpool)
-                    return
-                enhanced_carpool = self.transformer.enhance_carpool(carpool)
-                # TODO should only store enhanced_carpool, if it has 2 or more stops
-                assert_folder_exists(f'data/enhanced/{carpool.agency}/')
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(enhanced_carpool.json())
-                logger.info("Added enhanced carpool %s:%s", carpool.agency, carpool.id)
+        return self._load_as_trip(carpool)
+        # id = "{}:{}".format(carpool.agency, carpool.id)
+        # filename = f'data/enhanced/{carpool.agency}/{carpool.id}.json'
+        # try:
+        #     existing_carpool = self._load_carpool_if_exists(carpool.agency, carpool.id)
+        #     if existing_carpool and existing_carpool.lastUpdated == carpool.lastUpdated:
+        #         enhanced_carpool = existing_carpool
+        #     else:
+        #         if len(carpool.stops) < 2 or self.distance_in_m(carpool) < 1000:
+        #             logger.warning("Failed to add carpool %s:%s to TripStore, distance too low", carpool.agency, carpool.id)
+        #             self.handle_failed_carpool_enhancement(carpool)
+        #             return
+        #         enhanced_carpool = self.transformer.enhance_carpool(carpool)
+        #         # TODO should only store enhanced_carpool, if it has 2 or more stops
+        #         assert_folder_exists(f'data/enhanced/{carpool.agency}/')
+        #         with open(filename, 'w', encoding='utf-8') as f:
+        #             f.write(enhanced_carpool.json())
+        #         logger.info("Added enhanced carpool %s:%s", carpool.agency, carpool.id)
             
-            return self._load_as_trip(enhanced_carpool)
-        except RoutingException as err:
-            logger.warning("Failed to add carpool %s:%s to TripStore due to RoutingException %s", carpool.agency, carpool.id, getattr(err, 'message', repr(err)))
-            self.handle_failed_carpool_enhancement(carpool)
-        except Exception as err:
-            logger.error("Failed to add carpool %s:%s to TripStore.", carpool.agency, carpool.id, exc_info=True)
-            self.handle_failed_carpool_enhancement(carpool)
+        #     return self._load_as_trip(enhanced_carpool)
+        # except RoutingException as err:
+        #     logger.warning("Failed to add carpool %s:%s to TripStore due to RoutingException %s", carpool.agency, carpool.id, getattr(err, 'message', repr(err)))
+        #     self.handle_failed_carpool_enhancement(carpool)
+        # except Exception as err:
+        #     logger.error("Failed to add carpool %s:%s to TripStore.", carpool.agency, carpool.id, exc_info=True)
+        #     self.handle_failed_carpool_enhancement(carpool)
 
     def handle_failed_carpool_enhancement(sellf, carpool: Carpool):
         assert_folder_exists(f'data/failed/{carpool.agency}/')
@@ -200,7 +203,7 @@ class TripTransformer:
     REPLACEMENT_STOPS_SERACH_RADIUS_IN_M = 1000
     SIMPLIFY_TOLERANCE = 0.0001
 
-    router = RoutingService(config.graphhopper_base_url)
+    # router = RoutingService(config.graphhopper_base_url)
 
     def __init__(self, stops_store):
         self.stops_store = stops_store
@@ -217,7 +220,7 @@ class TripTransformer:
             max([pt[0] for pt in path.coordinates]),
             max([pt[1] for pt in path.coordinates]))
             
-        trip = Trip(trip_id, route_name, headsign, str(carpool.deeplink), carpool.departureDate, carpool.departureTime, carpool.path, carpool.agency, carpool.lastUpdated, stop_times, carpool.driver, carpool.additional_ridesharing_info, bbox)
+        trip = Trip(trip_id, route_name, headsign, str(carpool.deeplink), carpool.departureDate, carpool.departureTime, carpool.path, carpool.agency, carpool.lastUpdated, stop_times, carpool.driver, carpool.additional_ridesharing_info, carpool.route_color, carpool.route_text_color, bbox)
 
         return trip
 
@@ -294,7 +297,8 @@ class TripTransformer:
             
             if cnt < len(instructions):
                 if instructions[cnt]["distance"] ==0:
-                    raise RoutingException("Origin and destinaction too close")
+                    raise Exception("Origin and destinaction too close")
+                    # raise RoutingException("Origin and destinaction too close")
                 percent_dist = (distance - cumulated_distance) / instructions[cnt]["distance"]
                 stop_time = cumulated_time + percent_dist * instructions[cnt]["time"]
                 stop_times.append(stop_time)
