@@ -12,6 +12,7 @@ import schedule
 import threading
 import time
 import logging
+import os
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from .models.Carpool import Carpool, Region
@@ -19,8 +20,8 @@ from .router import _assert_region_exists
 from .services import stops #TODO: make stop service its own package??
 from .services.trips import TripStore, Trip
 from .services.carpools import CarpoolService
-from amarillo.services.agencies import AgencyService
-from amarillo.services.regions import RegionService
+from .services.agencies import AgencyService
+from .services.regions import RegionService
 from amarillo.utils.utils import agency_carpool_ids_from_filename
 
 
@@ -53,6 +54,11 @@ class EventHandler(FileSystemEventHandler):
 
 
 def init():
+	logger.info(f"Current working directory is {os.path.abspath(os.getcwd())}")
+	if not os.path.isdir('data/agency'):
+		logger.error(f'{os.path.abspath("data/agency")} directory does not exist')
+	
+
 	container['agencies'] = AgencyService()
 	logger.info("Loaded %d agencies", len(container['agencies'].agencies))
 
@@ -76,12 +82,13 @@ def init():
 	logger.info("Restore carpools...")
 
 	for agency_id in container['agencies'].agencies:
-		for carpool_file_name in glob(f'data/carpool/{agency_id}/*.json'):
+		for carpool_file_name in glob(f'data/enhanced/{agency_id}/*.json'):
 			try:
 				with open(carpool_file_name) as carpool_file:
 					carpool = Carpool(**(json.load(carpool_file)))
 					#TODO: convert to trip and add to tripstore directly
 					container['carpools'].put(carpool.agency, carpool.id, carpool)
+					logger.info(f"Restored carpool {carpool_file_name}")
 			except Exception as e:
 				logger.warning("Issue during restore of carpool %s: %s", carpool_file_name, repr(e))
 
@@ -90,21 +97,21 @@ def init():
 	observer.schedule(EventHandler(), 'data/enhanced', recursive=True)
 	observer.start()
 
-def run_schedule():
+# def run_schedule():
 
-	while 1:
-		try:
-			schedule.run_pending()
-		except Exception as e:
-			logger.exception(e)
-		time.sleep(1)
+# 	while 1:
+# 		try:
+# 			schedule.run_pending()
+# 		except Exception as e:
+# 			logger.exception(e)
+# 		time.sleep(1)
 
-def midnight():
-	container['stops_store'].load_stop_sources()
-	# container['trips_store'].unflag_unrecent_updates()
-	# container['carpools'].purge_outdated_offers()
+# def midnight():
+# 	container['stops_store'].load_stop_sources()
+# 	# container['trips_store'].unflag_unrecent_updates()
+# 	# container['carpools'].purge_outdated_offers()
 
-	generate_gtfs()
+# 	generate_gtfs()
 
 #TODO: generate for a specific region only
 #TODO: what happens when there are no trips?
@@ -128,20 +135,20 @@ def generate_gtfs_rt():
 	for region in container['regions'].regions.values():
 		rt = producer.export_feed(time.time(), f"data/gtfs/amarillo.{region.id}.gtfsrt", bbox=region.bbox)
 
-def start_schedule():
-	schedule.every().day.at("00:00").do(midnight)
-	schedule.every(60).seconds.do(generate_gtfs_rt)
-	# Create all feeds once at startup
-	schedule.run_all()
-	job_thread = threading.Thread(target=run_schedule, daemon=True)
-	job_thread.start()
+# def start_schedule():
+# 	# schedule.every().day.at("00:00").do(midnight)
+# 	schedule.every(60).seconds.do(generate_gtfs_rt)
+# 	# Create all feeds once at startup
+# 	schedule.run_all()
+# 	job_thread = threading.Thread(target=run_schedule, daemon=True)
+# 	job_thread.start()
 
-def setup(app : FastAPI):
-	# TODO: Create all feeds once at startup
-	# configure_enhancer_services()
-	# app.include_router(router)
-	# start_schedule()
-	pass
+# def setup(app : FastAPI):
+# 	# TODO: Create all feeds once at startup
+# 	# configure_enhancer_services()
+# 	# app.include_router(router)
+# 	# start_schedule()
+# 	pass
 
 logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
 logger = logging.getLogger("gtfs-generator")
@@ -243,9 +250,9 @@ async def get_file(region_id: str):
 	# verify_permission("gtfs", requesting_user)
 	return FileResponse(f'data/gtfs/amarillo.{region_id}.gtfs.zip')
 
-@app.get("/region/{region_id}/grfs-rt/",
-    summary="Return GRFS-RT Feed for this region",
-    response_description="GRFS-RT-Feed",
+@app.get("/region/{region_id}/gtfs-rt/",
+    summary="Return GTFS-RT Feed for this region",
+    response_description="GTFS-RT-Feed",
     response_class=FileResponse,
     responses={
                 status.HTTP_404_NOT_FOUND: {"description": "Region not found"},
@@ -256,20 +263,20 @@ async def get_file(region_id: str, format: str = 'protobuf'):
     generate_gtfs_rt()
     _assert_region_exists(region_id)
     if format == 'json':
-        return FileResponse(f'data/grfs/amarillo.{region_id}.gtfsrt.json')
+        return FileResponse(f'data/gtfs/amarillo.{region_id}.gtfsrt.json')
     elif format == 'protobuf':
-        return FileResponse(f'data/grfs/amarillo.{region_id}.gtfsrt.pbf')
+        return FileResponse(f'data/gtfs/amarillo.{region_id}.gtfsrt.pbf')
     else:
         message = "Specified format is not supported, i.e. neither protobuf nor json."
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 #TODO: sync endpoint that calls midnight
 
-@app.post("/sync",
-	operation_id="sync")
-#TODO: add examples
-async def post_sync():
+# @app.post("/sync",
+# 	operation_id="sync")
+# #TODO: add examples
+# async def post_sync():
 
-	logger.info(f"Sync")
+# 	logger.info(f"Sync")
 
-	midnight()
+# 	midnight()
