@@ -10,10 +10,8 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
 COPY ./amarillo-gtfs-generator /app/amarillo-gtfs-generator
-COPY ./config /app/config
 COPY ./logging.conf /app
 
-ENV ADMIN_TOKEN=""
 ENV MODULE_NAME=amarillo-gtfs-generator.gtfs_generator
 ENV MAX_WORKERS=1
 
