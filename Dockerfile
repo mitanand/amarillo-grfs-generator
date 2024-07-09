@@ -9,10 +9,10 @@ EXPOSE 80
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
-COPY ./amarillo-gtfs-generator /app/amarillo-gtfs-generator
+COPY ./amarillo_gtfs_generator /app/amarillo_gtfs_generator
 COPY ./logging.conf /app
 
-ENV MODULE_NAME=amarillo-gtfs-generator.gtfs_generator
+ENV MODULE_NAME=amarillo_gtfs_generator.gtfs_generator
 ENV MAX_WORKERS=1
 
 RUN useradd amarillo

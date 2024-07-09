@@ -23,17 +23,14 @@
             "request": "launch",
             "module": "uvicorn",
             "args": [
-                "amarillo-gtfs-generator.gtfs_generator:app",
+                "amarillo_gtfs_generator.gtfs_generator:app",
                 "--workers=1",
                 "--port=8002"
             ],
             // "preLaunchTask": "enhance",
             "jinja": true,
             "justMyCode": false,
-            "env": {
-                "admin_token": "supersecret",
-                "ride2go_token": "supersecret2"
-            }
+            "env": {}
         }
     ]
 }

@@ -1,8 +1,8 @@
 from amarillo.tests.sampledata import carpool_1234, data1, carpool_repeating_json, stop_issue
-from amarillo.plugins.enhancer.services.gtfs_export import GtfsExport
-from amarillo.plugins.enhancer.services.gtfs import GtfsRtProducer
-from amarillo.plugins.enhancer.services.stops import StopsStore
-from amarillo.plugins.enhancer.services.trips import TripStore
+from amarillo_gtfs_generator.gtfs_export import GtfsExport
+from amarillo_gtfs_generator.gtfs import GtfsRtProducer
+from amarillo_stops.stops import StopsStore
+from amarillo_gtfs_generator.services.trips import TripStore
 from amarillo.models.Carpool import Carpool
 from datetime import datetime
 import time

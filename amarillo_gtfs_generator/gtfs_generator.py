@@ -17,7 +17,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from .models.Carpool import Carpool, Region
 from .router import _assert_region_exists
-from .services import stops #TODO: make stop service its own package??
+from amarillo_stops import stops
 from .services.trips import TripStore, Trip
 from .services.carpools import CarpoolService
 from .services.agencies import AgencyService
@@ -96,22 +96,25 @@ def init():
 
 	observer.schedule(EventHandler(), 'data/enhanced', recursive=True)
 	observer.start()
+	start_schedule()
 
-# def run_schedule():
+	generate_gtfs()
 
-# 	while 1:
-# 		try:
-# 			schedule.run_pending()
-# 		except Exception as e:
-# 			logger.exception(e)
-# 		time.sleep(1)
 
-# def midnight():
-# 	container['stops_store'].load_stop_sources()
-# 	# container['trips_store'].unflag_unrecent_updates()
-# 	# container['carpools'].purge_outdated_offers()
+def run_schedule():
+	while 1:
+		try:
+			schedule.run_pending()
+		except Exception as e:
+			logger.exception(e)
+		time.sleep(1)
 
-# 	generate_gtfs()
+def midnight():
+	container['stops_store'].load_stop_sources()
+	container['trips_store'].unflag_unrecent_updates()
+	container['carpools'].purge_outdated_offers()
+
+	generate_gtfs()
 
 #TODO: generate for a specific region only
 #TODO: what happens when there are no trips?
@@ -135,20 +138,14 @@ def generate_gtfs_rt():
 	for region in container['regions'].regions.values():
 		rt = producer.export_feed(time.time(), f"data/gtfs/amarillo.{region.id}.gtfsrt", bbox=region.bbox)
 
-# def start_schedule():
-# 	# schedule.every().day.at("00:00").do(midnight)
+def start_schedule():
+	schedule.every().day.at("00:00").do(midnight)
 # 	schedule.every(60).seconds.do(generate_gtfs_rt)
-# 	# Create all feeds once at startup
-# 	schedule.run_all()
-# 	job_thread = threading.Thread(target=run_schedule, daemon=True)
-# 	job_thread.start()
+	# Create all feeds once at startup
+	# schedule.run_all()
+	job_thread = threading.Thread(target=run_schedule, daemon=True)
+	job_thread.start()
 
-# def setup(app : FastAPI):
-# 	# TODO: Create all feeds once at startup
-# 	# configure_enhancer_services()
-# 	# app.include_router(router)
-# 	# start_schedule()
-# 	pass
 
 logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
 logger = logging.getLogger("gtfs-generator")
@@ -272,11 +269,11 @@ async def get_file(region_id: str, format: str = 'protobuf'):
 
 #TODO: sync endpoint that calls midnight
 
-# @app.post("/sync",
-# 	operation_id="sync")
-# #TODO: add examples
-# async def post_sync():
+@app.post("/sync",
+	operation_id="sync")
+#TODO: add examples
+async def post_sync():
 
-# 	logger.info(f"Sync")
+	logger.info(f"Sync")
 
-# 	midnight()
+	midnight()
