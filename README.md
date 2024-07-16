@@ -1,7 +1,10 @@
 # amarillo-gtfs-generator
 Generate GTFS from carpools as standalone (Docker) service.
 
-This service complements the Amarillo application, creating GTFS and GTFS-RT data from the enhanced Amarillo carpool files.
+This service complements the Amarillo application, creating GTFS and GTFS-RT data from the enhanced Amarillo carpool files. 
+It is a non-public backend service called from the Amarillo FastAPI application.
+You can run it as part of docker compose, or separately using the instructions below.
+
 
 # Usage
 
@@ -49,17 +52,17 @@ The generator will use this data to populate agency.txt in the GTFS output.
 
 `amarillo-gtfs-generator` uses `uvicorn` to run. Uvicorn can be configured as normal by passing in arguments such as `--port 8002` to change the port number.
 
-## 2. Add carpool files to /data/enhanced
+## 2. Install the gtfs-exporter plugin for Amarillo
 
-The generator listens to file system events in the `/data/enhanced` folder to recognize newly added or deleted carpools. GTFS generation happens automatically on startup, at midnight on a schedule, and by sending a GET request to a `/region/{region_id}/gtfs` or `/region/{region_id}/gtfs-rt` endpoint.
+This is a separate service and not used by Amarillo by default. You should use the  [amarillo-gtfs-exporter plugin](https://github.com/mfdz/amarillo-gtfs-exporter) which creates endpoints for `/region/{region_id}/gtfs` and `/region/{region_id}/gtfs-rt` on your Amarillo instance. These will serve the GTFS zip files from `data/gtfs`, or if they do not exist yet, they will call the configured generator and cache the results.
+
+## 3. Add carpools to Amarillo
+
+Use Amarillo's `/carpool` endpoint to create new carpools. The generator listens to file system events in the `/data/enhanced` folder to recognize newly added or deleted carpools. It will also discover existing carpools on startup. GTFS generation happens automatically on startup, at midnight on a schedule, and by sending a GET request to a `/region/{region_id}/gtfs` or `/region/{region_id}/gtfs-rt` endpoint.
 
 Amarillo will use its configured enhancer to create enhanced carpool files. They will get picked up by the generator and they will be included in the next batch of generated GTFS data. Changes to carpools will be reflected immediately in the GTFS-RT output.
 
 <!-- Q: how immediately? -->
-
-## 3. Install the gtfs-exporter plugin for Amarillo
-
-The [amarillo-gtfs-exporter plugin](https://github.com/mfdz/amarillo-gtfs-exporter) creates endpoints for `/region/{region_id}/gtfs` and `/region/{region_id}/gtfs-rt` on your Amarillo instance. These will serve the GTFS zip files from `data/gtfs`, or if they do not exist yet, they will call the configured generator and cache the results.
 
 # Run with uvicorn
 
