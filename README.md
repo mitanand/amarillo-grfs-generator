@@ -5,6 +5,9 @@ This service complements the Amarillo application, creating GTFS and GTFS-RT dat
 It is a non-public backend service called from the Amarillo FastAPI application.
 You can run it as part of docker compose, or separately using the instructions below.
 
+# Overview
+
+ ![Amarillo GTFS generation overview](/docs-overview-diagram.png)
 
 # Usage
 
