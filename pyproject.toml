@@ -1,0 +1,11 @@
+[project]
+name = "amarillo-gtfs-generator"
+version = "0.0.2"
+dependencies = [
+    "amarillo",
+    "schedule",
+    "watchdog",
+]
+
+[tool.setuptools.packages]
+find = {}
