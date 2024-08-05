@@ -15,6 +15,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+#TODO: remove unused functions from Trip class
 class Trip:
 
     def __init__(self, trip_id, route_name, headsign, url, calendar, departureTime, path, agency, lastUpdated, stop_times, driver: Driver, additional_ridesharing_info: RidesharingInfo, route_color, route_text_color, bbox):

@@ -16,7 +16,7 @@ import os
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from .models.Carpool import Carpool, Region
-from .router import _assert_region_exists
+from .utils import _assert_region_exists
 from amarillo_stops import stops
 from .services.trips import TripStore, Trip
 from .services.carpools import CarpoolService
@@ -212,27 +212,6 @@ app = FastAPI(title="Amarillo GTFS Generator",
 
 init()
 
-# @app.post("/",
-# 	operation_id="enhancecarpool",
-# 	summary="Add a new or update existing carpool",
-# 	description="Carpool object to be enhanced",
-# 	responses={
-# 		status.HTTP_404_NOT_FOUND: {
-# 			"description": "Agency does not exist"},
-                 
-# 	})
-#TODO: add examples
-# async def post_carpool(carpool: Carpool = Body(...)):
-
-# 	logger.info(f"POST trip {carpool.agency}:{carpool.id}.")
-
-# 	trips_store: TripStore = container['trips_store']
-# 	trip = trips_store._load_as_trip(carpool)
-
-#TODO: carpool deleted endpoint
-	
-#TODO: gtfs, gtfs-rt endpoints
-
 @app.get("/region/{region_id}/gtfs", 
     summary="Return GTFS Feed for this region",
     response_description="GTFS-Feed (zip-file)",
@@ -267,11 +246,8 @@ async def get_file(region_id: str, format: str = 'protobuf'):
         message = "Specified format is not supported, i.e. neither protobuf nor json."
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
-#TODO: sync endpoint that calls midnight
-
 @app.post("/sync",
 	operation_id="sync")
-#TODO: add examples
 async def post_sync():
 
 	logger.info(f"Sync")
