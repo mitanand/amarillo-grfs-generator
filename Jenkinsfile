@@ -7,7 +7,7 @@ pipeline {
         DOCKER_REGISTRY_URL = 'https://git.gerhardt.io'
         OWNER = 'amarillo'
         IMAGE_NAME = 'amarillo-gtfs-generator'
-        DISTRIBUTION = '2.0.0'
+        DISTRIBUTION = '2.0.1'
         TAG = "${DISTRIBUTION}-${BUILD_NUMBER}"
     }
     stages {
