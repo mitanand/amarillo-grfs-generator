@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Body, HTTPException, status
 from fastapi.responses import FileResponse
 
-from .gtfs_export import GtfsExport, GtfsFeedInfo, GtfsAgency
+from .gtfs_export import GtfsExport
+from .models.gtfs import GtfsFeedInfo
+
 from .gtfs import GtfsRtProducer
 from amarillo.utils.container import container
 # from amarillo.plugins.gtfs_export.router import router

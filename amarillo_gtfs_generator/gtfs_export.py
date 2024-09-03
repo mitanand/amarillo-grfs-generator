@@ -8,10 +8,13 @@ import logging
 import re
 
 from amarillo.utils.utils import assert_folder_exists
-from .models.gtfs import GtfsTimeDelta, GtfsFeedInfo, GtfsAgency, GtfsRoute, GtfsStop, GtfsStopTime, GtfsTrip, GtfsCalendar, GtfsCalendarDate, GtfsShape
+from .models.gtfs import GtfsAgency, GtfsRoute, GtfsStop, GtfsTrip, GtfsCalendar, GtfsCalendarDate, GtfsShape, GtfsDriver, GtfsAdditionalRidesharingInfo
 from amarillo_stops.stops import is_carpooling_stop
 from .gtfs_constants import *
 from .models.Carpool import Agency
+from amarillo.models.Carpool import Driver, RidesharingInfo
+from amarillo.utils.utils import geodesic_distance_in_m
+from .services.trips import Trip
 
 
 logger = logging.getLogger(__name__)
@@ -20,11 +23,11 @@ class GtfsExport:
     
     stops_counter = 0
     trips_counter = 0
-    routes_counter = 0
+    trip_counter = 0
 
     stored_stops = {}
     
-    def __init__(self, agencies: dict[str, Agency], feed_info, ridestore, stopstore, bbox = None):
+    def __init__(self, agencies :  {str, Agency}, feed_info, ridestore, stopstore, bbox = None):
         self.stops = {}
         self.routes = []
         self.calendar_dates = []
@@ -33,7 +36,10 @@ class GtfsExport:
         self.stop_times = []
         self.calendar = []
         self.shapes = []
-        self.agencies = [GtfsAgency(a.id, a.name, a.url, a.timezone, a.lang, a.email) for a in agencies.values()]
+        self.drivers = {} #use a dictionary to avoid duplicate ids
+        self.additional_ridesharing_infos = []
+        # GtfsAgency(dict["id"], dict["name"], dict["url"], dict["timezone"], dict["lang"], dict["email"])
+        self.agencies = [GtfsAgency(agency.id, agency.name, agency.url, agency.timezone, agency.lang, agency.email) for agency in agencies.values()]
         self.feed_info = feed_info
         self.localized_to = " nach "
         self.localized_short_name = "Mitfahrgelegenheit"
@@ -53,11 +59,14 @@ class GtfsExport:
         self._write_csvfile(gtfsfolder, 'stops.txt', self.stops.values())
         self._write_csvfile(gtfsfolder, 'stop_times.txt', self.stop_times)
         self._write_csvfile(gtfsfolder, 'shapes.txt', self.shapes)
+        self._write_csvfile(gtfsfolder, 'driver.txt', self.drivers.values())
+        self._write_csvfile(gtfsfolder, 'additional_ridesharing_info.txt', self.additional_ridesharing_infos)
         self._zip_files(gtfszip_filename, gtfsfolder)
 
     def _zip_files(self, gtfszip_filename, gtfsfolder):
         gtfsfiles = ['agency.txt', 'feed_info.txt', 'routes.txt', 'trips.txt', 
-                'calendar.txt', 'calendar_dates.txt', 'stops.txt', 'stop_times.txt', 'shapes.txt']
+                'calendar.txt', 'calendar_dates.txt', 'stops.txt', 'stop_times.txt', 
+                'shapes.txt', 'driver.txt', 'additional_ridesharing_info.txt']
         with ZipFile(gtfszip_filename, 'w') as gtfszip:
             for gtfsfile in gtfsfiles:
                 gtfszip.write(gtfsfolder+'/'+gtfsfile, gtfsfile)
@@ -75,20 +84,94 @@ class GtfsExport:
             for stop in stopSet["stops"].itertuples():
                 self._load_stored_stop(stop)
         cloned_trips = dict(ridestore.trips)
-        for _, trip in cloned_trips.items():
+        groups, cloned_trips = self.group_trips_into_routes(cloned_trips)
+        for group in groups:
+            if self.bbox is None or any(trip.intersects(self.bbox) for trip in group.values()):
+                self.convert_route(group)
+        for url, trip in cloned_trips.items():
+            # TODO: convert ridesharing info and driver data
             if self.bbox is None or trip.intersects(self.bbox):
                 self._convert_trip(trip)
+
+    def group_trips_into_routes(self, trips: dict):
+        ungrouped_trips = dict(trips)
+        route_groups = list()
+        current_route_id = 1
+
+        while len(ungrouped_trips) > 0:
+            trip_id, current_trip = ungrouped_trips.popitem()
+
+            current_group = {trip_id: current_trip}
+            current_trip.route_id = current_route_id
+
+            for other_id, other_trip in list(ungrouped_trips.items()):
+                # if an ungrouped trip is from the same agency close to any of the grouped trips, add it to the route group
+                # TODO: it should be possible to optimize this
+                if (any(grouped_trip.agency == other_trip.agency and self.trips_are_close(other_trip, grouped_trip) for grouped_trip in current_group.values())):
+                    current_group[other_id] = ungrouped_trips.pop(other_id)
+                    current_group[other_id].route_id = current_route_id
+
+            
+            route_groups.append(current_group)
+            current_route_id += 1
+
+        return route_groups, trips
     
-    def _convert_trip(self, trip):
-        self.routes_counter += 1
-        self.routes.append(self._create_route(trip))
+    def trips_are_close(self, trip1, trip2):
+        trip1_start = trip1.path.coordinates[0]
+        trip1_end = trip1.path.coordinates[-1]
+
+        trip2_start = trip2.path.coordinates[0]
+        trip2_end = trip2.path.coordinates[-1]
+
+        res = self.within_range(trip1_start, trip2_start) and self.within_range(trip1_end, trip2_end)
+        return res
+    
+    def within_range(self, stop1, stop2):
+        MERGE_RANGE_M = 500
+        return geodesic_distance_in_m(stop1, stop2) <= MERGE_RANGE_M
+    
+    def convert_route(self, route_group):
+        agency = "multiple"
+
+        #if there is only one agency, use that
+        agencies = set(trip.agency for id, trip in route_group.items())
+        if len(agencies) == 1: agency = agencies.pop()
+        trip : Trip = next(iter(route_group.values())) # grab any trip, relevant values should be the same
+
+        self.routes.append(self._create_route(agency, trip.route_id, trip.route_name, trip.route_color, trip.route_text_color))
+
+    def _convert_trip(self, trip: Trip):
+        self.trip_counter += 1
         self.calendar.append(self._create_calendar(trip))
         if not trip.runs_regularly:
             self.calendar_dates.append(self._create_calendar_date(trip))
-        self.trips.append(self._create_trip(trip, self.routes_counter))
+        self.trips.append(self._create_trip(trip, self.trip_counter))
         self._append_stops_and_stop_times(trip)
-        self._append_shapes(trip, self.routes_counter)
+        self._append_shapes(trip, self.trip_counter)
+
+        if(trip.driver is not None):
+            self.drivers[trip.driver.driver_id] = self._convert_driver(trip.driver)
+        if(trip.additional_ridesharing_info is not None):
+            self.additional_ridesharing_infos.append(
+                self._convert_additional_ridesharing_info(trip.trip_id, trip.additional_ridesharing_info))
     
+    def _convert_driver(self, driver: Driver):
+        return GtfsDriver(driver.driver_id, driver.profile_picture, driver.rating)
+
+    def _convert_additional_ridesharing_info(self, trip_id, info: RidesharingInfo):
+        # if we don't specify .value, the enum will appear in the export as e.g. LuggageSize.large
+        # and missing optional values get None
+        def get_enum_value(enum):
+            return enum.value if enum is not None else None
+        
+        def format_date(date: datetime):
+            return date.strftime("%Y%m%d %H:%M:%S")
+        
+        return GtfsAdditionalRidesharingInfo(
+            trip_id, info.number_free_seats, get_enum_value(info.same_gender), get_enum_value(info.luggage_size), get_enum_value(info.animal_car), 
+            info.car_model, info.car_brand, format_date(info.creation_date), get_enum_value(info.smoking), info.payment_method)
+
     def _trip_headsign(self, destination):
         destination = destination.replace('(Deutschland)', '')
         destination = destination.replace(', Deutschland', '')
@@ -112,8 +195,8 @@ class GtfsExport:
             logger.exception(ex)
             return destination
    
-    def _create_route(self, trip): 
-        return GtfsRoute(trip.agency, trip.trip_id, trip.route_long_name(), RIDESHARING_ROUTE_TYPE, trip.url, "", trip.route_color, trip.route_text_color)
+    def _create_route(self, agency, route_id, long_name, color, text_color): 
+        return GtfsRoute(agency, route_id, long_name, RIDESHARING_ROUTE_TYPE, "", color, text_color)
         
     def _create_calendar(self, trip):
         # TODO currently, calendar is not provided by Fahrgemeinschaft.de interface.
@@ -133,8 +216,9 @@ class GtfsExport:
     def _create_calendar_date(self, trip):
         return GtfsCalendarDate(trip.trip_id, self._convert_stop_date(trip.start), CALENDAR_DATES_EXCEPTION_TYPE_ADDED)
     
-    def _create_trip(self, trip, shape_id):
-        return GtfsTrip(trip.trip_id, trip.trip_id, trip.trip_id, shape_id, trip.trip_headsign, NO_BIKES_ALLOWED)
+    def _create_trip(self, trip : Trip, shape_id):
+        driver_id = None if trip.driver is None else trip.driver.driver_id
+        return GtfsTrip(trip.route_id, trip.trip_id, driver_id, trip.trip_id, shape_id, trip.trip_headsign, NO_BIKES_ALLOWED, trip.url)
     
     def _convert_stop(self, stop):
         """
