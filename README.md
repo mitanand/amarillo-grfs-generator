@@ -1,7 +1,9 @@
-# amarillo-gtfs-generator
-Generate GTFS from carpools as standalone (Docker) service.
+# amarillo-grfs -generator
+Generate Generate GRFS (General Ridesharing Feed Specification) from Amarillo carpools as standalone (Docker) service.
 
-This service complements the Amarillo application, creating GTFS and GTFS-RT data from the enhanced Amarillo carpool files. 
+[GRFS](https://github.com/mitanand/grfs) is an extension of the GTFS standard that adds additional info to aid ridesharing.
+
+This service complements the Amarillo application, creating GRFS and GTFS-RT data from the enhanced Amarillo carpool files. 
 It is a non-public backend service called from the Amarillo FastAPI application.
 You can run it as part of docker compose, or separately using the instructions below.
 
