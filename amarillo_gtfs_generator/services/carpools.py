@@ -23,7 +23,10 @@ class CarpoolService():
               offers starting the day before yesterday as outdated
             * it's last update occured before MAX_OFFER_AGE_IN_DAYS
         """
-        runs_once = not isinstance(carpool.departureDate, set)        
+        runs_once = not isinstance(carpool.departureDate, set)
+        if( not carpool.lastUpdated):
+            logger.error(f"Trip '{carpool.id}' does not have lastUpdated date")
+            return False
         return (is_older_than_days(carpool.lastUpdated.date(), self.MAX_OFFER_AGE_IN_DAYS) or
             (runs_once and carpool.departureDate < yesterday()))
 
