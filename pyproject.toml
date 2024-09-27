@@ -1,7 +1,7 @@
 [project]
-name = "amarillo-gtfs-generator"
+name = "amarillo-grfs-generator"
 version = "2.0.1"
-description = "FastAPI app providing GTFS generation for Amarillo carpools"
+description = "FastAPI app providing GRFS generation for Amarillo carpools"
 readme = "README.md"
 license = {file = "LICENSE"}
 dependencies = [
