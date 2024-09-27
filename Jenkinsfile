@@ -6,7 +6,7 @@ pipeline {
         TWINE_REPO_URL = "https://git.gerhardt.io/api/packages/amarillo/pypi"
         DOCKER_REGISTRY_URL = 'https://git.gerhardt.io'
         OWNER = 'amarillo'
-        IMAGE_NAME = 'amarillo-gtfs-generator'
+        IMAGE_NAME = 'amarillo-grfs-generator'
         DISTRIBUTION = '2.0.1'
         TAG = "${DISTRIBUTION}-${BUILD_NUMBER}"
     }
